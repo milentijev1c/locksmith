@@ -10,7 +10,7 @@ integration with local web applications. The service listens on
 ## Quick start
 
 Prerequisites:
-- Go 1.22 or newer
+- Go 1.26 or newer
 - pcscd / libpcsclite installed on Linux (e.g. `libpcsclite-dev`)
 
 Run:
