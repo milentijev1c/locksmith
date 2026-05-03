@@ -21,6 +21,12 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - name: Install system dependencies (libpcsclite)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libpcsclite-dev pcscd pcsc-tools
+
       - name: Cache Go build
         uses: actions/cache@v4
         with:
