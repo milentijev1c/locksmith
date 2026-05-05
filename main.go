@@ -44,8 +44,17 @@ func main() {
 	go cardService.Start(context.Background())
 	logger.Println("Card service started")
 
+	// Initialize signing service
+	signService, err := card.NewSignService(logger, cfg.PKCS11Module)
+	if err != nil {
+		logger.Printf("Warning: signing unavailable: %v", err)
+	}
+	if signService != nil {
+		defer signService.Close()
+	}
+
 	// Initialize HTTP server
-	srv := server.NewServer(cfg, cardService, logger, version)
+	srv := server.NewServer(cfg, cardService, signService, logger, version)
 
 	// Start HTTP server in goroutine
 	go func() {

@@ -16,7 +16,6 @@ vendor/
 *.log
 
 # Non-production source and local files
-card/sign.go
 server/rest.go
 card/*_test.go
 server/*_test.go

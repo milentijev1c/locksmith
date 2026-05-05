@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 type Server struct {
 	config      *config.Config
 	cardService *card.CardService
+	signService *card.SignService
 	logger      *log.Logger
 	version     string
 
@@ -24,10 +27,11 @@ type Server struct {
 }
 
 // NewServer creates a new server instance
-func NewServer(cfg *config.Config, cardService *card.CardService, logger *log.Logger, version string) *Server {
+func NewServer(cfg *config.Config, cardService *card.CardService, signService *card.SignService, logger *log.Logger, version string) *Server {
 	s := &Server{
 		config:      cfg,
 		cardService: cardService,
+		signService: signService,
 		logger:      logger,
 		version:     version,
 		hub:         NewWebSocketHub(logger),
@@ -160,14 +164,48 @@ func (s *Server) handleCardRead(w http.ResponseWriter, r *http.Request) {
 		cardData.FirstName, cardData.LastName, cardData.JMBG)
 }
 
-// handleCardSign signs a document (not implemented)
+// handleCardSign signs a document with the card's private key
 func (s *Server) handleCardSign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	http.Error(w, "signing not implemented", http.StatusNotImplemented)
+	if s.signService == nil {
+		http.Error(w, "signing not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req card.SignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.PayloadBase64 == "" || req.PIN == "" {
+		http.Error(w, "missing payload_base64 or pin", http.StatusBadRequest)
+		return
+	}
+
+	payload, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid payload encoding: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	signature, err := s.signService.Sign(payload, req.PIN, req.Algorithm)
+	if err != nil {
+		s.logger.Printf("Sign error: %v", err)
+		http.Error(w, fmt.Sprintf("signing failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	resp := card.SignResponse{
+		SignatureBase64: base64.StdEncoding.EncodeToString(signature),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // handleCardPhoto returns the card's photo
