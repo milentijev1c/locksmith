@@ -98,6 +98,10 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 // isOriginAllowed checks if an origin is in the allowed list
 func isOriginAllowed(origin string, allowed []string) bool {
+	if origin == "" {
+		return true
+	}
+
 	for _, allowedOrigin := range allowed {
 		if origin == allowedOrigin || origin == "http://localhost:3000" || origin == "http://127.0.0.1:3000" {
 			return true
@@ -205,12 +209,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.hub.Register(client)
 	defer s.hub.Unregister(client)
 
-	// Send middleware.ready event
-	client.send <- map[string]interface{}{
-		"type": "middleware.ready",
-		"payload": map[string]string{
-			"version": s.version,
-		},
+	status := s.cardService.GetStatus()
+	for _, message := range webSocketStartupMessages(status, s.version) {
+		client.send <- message
 	}
 
 	// Subscribe to card events
@@ -229,4 +230,34 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			conn.WriteJSON(event)
 		}
 	}
+}
+
+func webSocketStartupMessages(status map[string]interface{}, version string) []interface{} {
+	messages := []interface{}{
+		map[string]interface{}{
+			"type": "ws.connected",
+			"payload": map[string]string{
+				"version": version,
+			},
+		},
+	}
+
+	readerConnected, _ := status["reader_connected"].(bool)
+	readerName, _ := status["active_reader"].(string)
+
+	if readerConnected {
+		messages = append(messages, card.CardEvent{
+			Type:      "reader.connected",
+			Reader:    readerName,
+			Timestamp: time.Now(),
+		})
+		return messages
+	}
+
+	messages = append(messages, card.CardEvent{
+		Type:      "reader.disconnected",
+		Timestamp: time.Now(),
+	})
+
+	return messages
 }
