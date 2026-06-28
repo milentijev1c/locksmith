@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	"github.com/milentijev1c/locksmith/card"
 	"github.com/milentijev1c/locksmith/config"
 )

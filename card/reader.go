@@ -10,7 +10,7 @@ import (
 
 // ReaderManager handles PC/SC reader detection and connection
 type ReaderManager struct {
-	ctx *scard.Context
+	ctx    *scard.Context
 	logger *log.Logger
 }
 
@@ -52,14 +52,14 @@ func (rm *ReaderManager) MonitorReaders(stateChan chan<- *ReaderState) error {
 
 		// Build reader state array for monitoring
 		readerStates = readerStates[:0]
-		
+
 		// Add new readers to monitoring list
 		for _, reader := range readers {
 			if !knownReaders[reader] {
 				knownReaders[reader] = true
 				rm.logger.Printf("New reader detected: %s", reader)
 			}
-			
+
 			readerStates = append(readerStates, scard.ReaderState{
 				Reader:       reader,
 				CurrentState: scard.StateUnaware,
@@ -77,10 +77,10 @@ func (rm *ReaderManager) MonitorReaders(stateChan chan<- *ReaderState) error {
 		// Check for card presence changes
 		for i, state := range readerStates {
 			reader := readers[i]
-			
+
 			// Check if card is present
 			cardPresent := (state.EventState & scard.StatePresent) != 0
-			
+
 			// Send state update
 			stateChan <- &ReaderState{
 				Reader:      reader,

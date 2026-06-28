@@ -24,20 +24,20 @@ func NewIDCardReader(logger *log.Logger) *IDCardReader {
 
 // File locations on Serbian ID cards
 var (
-	ID_DOCUMENT_FILE_LOC   = []byte{0x0F, 0x02}
-	ID_PERSONAL_FILE_LOC   = []byte{0x0F, 0x03}
-	ID_RESIDENCE_FILE_LOC  = []byte{0x0F, 0x04}
-	ID_PHOTO_FILE_LOC      = []byte{0x0F, 0x06}
+	ID_DOCUMENT_FILE_LOC  = []byte{0x0F, 0x02}
+	ID_PERSONAL_FILE_LOC  = []byte{0x0F, 0x03}
+	ID_RESIDENCE_FILE_LOC = []byte{0x0F, 0x04}
+	ID_PHOTO_FILE_LOC     = []byte{0x0F, 0x06}
 )
 
 // AID (Application Identifiers) for Serbian ID cards
 var (
 	// Gemalto ID card AIDs
-	GEMALTO_ID_AID   = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x49, 0x44, 0x01}
-	GEMALTO_IF_AID   = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x49, 0x46, 0x01}
-	GEMALTO_RP_AID   = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x52, 0x50, 0x01}
+	GEMALTO_ID_AID = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x49, 0x44, 0x01}
+	GEMALTO_IF_AID = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x49, 0x46, 0x01}
+	GEMALTO_RP_AID = []byte{0xF3, 0x81, 0x00, 0x00, 0x02, 0x53, 0x45, 0x52, 0x52, 0x50, 0x01}
 	// Apollo ID card AID
-	APOLLO_ID_AID    = []byte{0xA0, 0x00, 0x00, 0x00, 0x49, 0x44, 0x00, 0x00}
+	APOLLO_ID_AID = []byte{0xA0, 0x00, 0x00, 0x00, 0x49, 0x44, 0x00, 0x00}
 )
 
 // ReadCard reads all data from a Serbian ID card and returns CardData
@@ -94,10 +94,10 @@ func (r *IDCardReader) readCardFiles(card *scard.Card, data *CardData) error {
 	if err != nil {
 		return fmt.Errorf("failed to read personal file: %w", err)
 	}
-	
+
 	r.logger.Printf("Personal data length: %d bytes", len(personalData))
 	r.logger.Printf("Personal data (hex): %s", formatHex(personalData[:min(len(personalData), 100)]))
-	
+
 	r.parsePersonalData(personalData, data)
 
 	// Read document data
@@ -336,9 +336,9 @@ func (r *IDCardReader) parseTLV(data []byte) map[int][]byte {
 
 		value := data[i : i+length]
 		result[tag] = value
-		
+
 		r.logger.Printf("TLV: tag=%04X, length=%d, value=%s", tag, length, formatValue(value))
-		
+
 		i += length
 	}
 
@@ -375,7 +375,7 @@ func (r *IDCardReader) parsePersonalData(data []byte, cardData *CardData) {
 
 	// TLV tags for personal data (based on actual card output)
 	// 0x1606 = JMBG, 0x1706 = Surname, 0x1806 = GivenName, 0x1906 = Father's name, 0x1A06 = Sex, 0x1B06 = Place of birth
-	
+
 	if jmbg, ok := fields[0x1606]; ok {
 		cardData.JMBG = strings.TrimRight(string(jmbg), "\x00")
 		r.logger.Printf("Parsed JMBG: %s", cardData.JMBG)
@@ -399,7 +399,7 @@ func (r *IDCardReader) parsePersonalData(data []byte, cardData *CardData) {
 		cardData.PlaceOfBirth = strings.TrimRight(string(birthPlace), "\x00")
 		r.logger.Printf("Parsed PlaceOfBirth: %s", cardData.PlaceOfBirth)
 	}
-	
+
 	// Try old-style tags as fallback
 	if jmbg, ok := fields[1558]; ok && cardData.JMBG == "" {
 		cardData.JMBG = strings.TrimRight(string(jmbg), "\x00")
@@ -440,82 +440,6 @@ func (r *IDCardReader) formatDate(data []byte) string {
 		return ""
 	}
 	return strings.TrimRight(string(data), "\x00")
-}
-
-// parseDateDDMMYYYY parses date in DD/MM/YYYY format (legacy)
-func (r *IDCardReader) parseDateDDMMYYYY(data []byte) string {
-	if len(data) < 4 {
-		return ""
-	}
-
-	day := data[0]
-	month := data[1]
-	year := binary.BigEndian.Uint16(data[2:4])
-
-	return fmt.Sprintf("%04d-%02d-%02d", year, month, day)
-}
-
-// selectFileByFID selects a file by FID (File ID)
-func (r *IDCardReader) selectFileByFID(card *scard.Card, fid []byte) ([]byte, error) {
-	// CLA=0x00, INS=0xA4 (SELECT), P1=0x00 (by FID), P2=0x00
-	apdu := []byte{0x00, 0xA4, 0x00, 0x00, byte(len(fid))}
-	apdu = append(apdu, fid...)
-
-	resp, err := card.Transmit(apdu)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp) < 2 {
-		return nil, fmt.Errorf("invalid response length")
-	}
-
-	sw := binary.BigEndian.Uint16(resp[len(resp)-2:])
-	if sw != 0x9000 {
-		return nil, fmt.Errorf("card error: 0x%04X", sw)
-	}
-
-	return resp[:len(resp)-2], nil
-}
-
-// selectFile legacy helper (use selectFileByAID)
-func (r *IDCardReader) selectFile(card *scard.Card, aid []byte) ([]byte, error) {
-	apdu := []byte{0x00, 0xA4, 0x04, 0x00, byte(len(aid))}
-	apdu = append(apdu, aid...)
-
-	resp, err := card.Transmit(apdu)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp) < 2 {
-		return nil, fmt.Errorf("invalid response length")
-	}
-
-	sw := binary.BigEndian.Uint16(resp[len(resp)-2:])
-	if sw != 0x9000 {
-		return nil, fmt.Errorf("card error: 0x%04X", sw)
-	}
-
-	return resp[:len(resp)-2], nil
-}
-
-// parseAddressData parses address TLV data
-func (r *IDCardReader) parseAddressData(data []byte, cardData *CardData) {
-	tlv := r.parseTLV(data)
-
-	if streetData, ok := tlv[0x91]; ok {
-		cardData.AddressStreet = strings.TrimRight(string(streetData), "\x00")
-	}
-	if numberData, ok := tlv[0x92]; ok {
-		cardData.AddressNumber = strings.TrimRight(string(numberData), "\x00")
-	}
-	if municipalityData, ok := tlv[0x93]; ok {
-		cardData.AddressMunicipality = strings.TrimRight(string(municipalityData), "\x00")
-	}
-	if placeData, ok := tlv[0x94]; ok {
-		cardData.AddressPlace = strings.TrimRight(string(placeData), "\x00")
-	}
 }
 
 // formatHex formats bytes as hex string
