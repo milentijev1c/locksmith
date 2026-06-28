@@ -214,7 +214,7 @@ func (s *Server) handleCardSign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // handleCardCertificate returns the DER-encoded certificate from the card as base64
@@ -237,7 +237,7 @@ func (s *Server) handleCardCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"certificate_base64": base64.StdEncoding.EncodeToString(certDER),
 	})
 }
@@ -297,9 +297,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case message := <-client.send:
-			conn.WriteJSON(message)
+			_ = conn.WriteJSON(message)
 		case event := <-eventChan:
-			conn.WriteJSON(event)
+			_ = conn.WriteJSON(event)
 		}
 	}
 }

@@ -91,7 +91,7 @@ func (ss *SignService) Init() error {
 
 	slots, err := p.GetSlotList(true)
 	if err != nil || len(slots) == 0 {
-		p.Finalize()
+		_ = p.Finalize()
 		p.Destroy()
 		return fmt.Errorf("no card readers with tokens available")
 	}
@@ -153,14 +153,12 @@ func (ss *SignService) Sign(payload []byte, pin string, algorithm string) ([]byt
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session: %w", err)
 	}
-	defer ss.ctx.CloseSession(session)
-
-	// Log in with PIN
+	defer ss.ctx.CloseSession(session) //nolint:errcheck
 	err = ss.ctx.Login(session, pkcs11.CKU_USER, pin)
 	if err != nil {
 		return nil, fmt.Errorf("PIN authentication failed: %w", err)
 	}
-	defer ss.ctx.Logout(session)
+	defer ss.ctx.Logout(session) //nolint:errcheck
 
 	// Find signing private key (CKA_SIGN=true, CKA_CLASS=CKO_PRIVATE_KEY)
 	privateKey, err := ss.findSigningKey(session)
@@ -193,7 +191,7 @@ func (ss *SignService) GetCertificate() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session: %w", err)
 	}
-	defer ss.ctx.CloseSession(session)
+	defer ss.ctx.CloseSession(session) //nolint:errcheck
 
 	// Find certificate objects (CKA_CLASS=CKO_CERTIFICATE)
 	err = ss.ctx.FindObjectsInit(session, []*pkcs11.Attribute{
@@ -204,7 +202,7 @@ func (ss *SignService) GetCertificate() ([]byte, error) {
 	}
 
 	objects, _, err := ss.ctx.FindObjects(session, 1)
-	ss.ctx.FindObjectsFinal(session)
+	_ = ss.ctx.FindObjectsFinal(session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find certificates: %w", err)
 	}
@@ -244,10 +242,9 @@ func (ss *SignService) findSigningKey(session pkcs11.SessionHandle) (pkcs11.Obje
 		return 0, fmt.Errorf("failed to initialize signing key search: %w", err)
 	}
 
-	objects, _, err := ss.ctx.FindObjects(session, 1)
-	ss.ctx.FindObjectsFinal(session)
-	if err != nil {
-		return 0, fmt.Errorf("failed to find signing keys: %w", err)
+	objects, _, _ := ss.ctx.FindObjects(session, 1)
+	if finErr := ss.ctx.FindObjectsFinal(session); finErr != nil {
+		ss.logger.Printf("FindObjectsFinal error: %v", finErr)
 	}
 	if len(objects) == 0 {
 		return ss.findAnyPrivateKey(session)
@@ -266,10 +263,9 @@ func (ss *SignService) findAnyPrivateKey(session pkcs11.SessionHandle) (pkcs11.O
 		return 0, fmt.Errorf("failed to initialize private key search: %w", err)
 	}
 
-	objects, _, err := ss.ctx.FindObjects(session, 1)
-	ss.ctx.FindObjectsFinal(session)
-	if err != nil {
-		return 0, fmt.Errorf("failed to find private keys: %w", err)
+	objects, _, _ := ss.ctx.FindObjects(session, 1)
+	if finErr := ss.ctx.FindObjectsFinal(session); finErr != nil {
+		ss.logger.Printf("FindObjectsFinal error: %v", finErr)
 	}
 	if len(objects) == 0 {
 		return 0, fmt.Errorf("no private key found on card")
@@ -303,8 +299,7 @@ func (ss *SignService) signWithPKCS11(session pkcs11.SessionHandle, privateKey p
 		0x30, innerLen,
 	}
 	digestInfo = append(digestInfo, oid...)
-	digestInfo = append(digestInfo, 0x05, 0x00)
-	digestInfo = append(digestInfo, 0x04, hashLen)
+	digestInfo = append(digestInfo, 0x05, 0x00, 0x04, hashLen)
 	digestInfo = append(digestInfo, hash...)
 
 	ss.logger.Printf("Signing %d bytes with CKM_RSA_PKCS, DigestInfo: %d bytes", len(digestInfo), len(digestInfo))
@@ -330,7 +325,7 @@ func (ss *SignService) signWithPKCS11(session pkcs11.SessionHandle, privateKey p
 // Close releases resources. Safe to call even if Init() was never called.
 func (ss *SignService) Close() {
 	if ss.ctx != nil {
-		ss.ctx.Finalize()
+		_ = ss.ctx.Finalize()
 		ss.ctx.Destroy()
 		ss.ctx = nil
 	}

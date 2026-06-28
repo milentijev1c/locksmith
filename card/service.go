@@ -12,9 +12,9 @@ import (
 
 // CardService manages card reading operations and event notifications
 type CardService struct {
-	ReaderManager   *ReaderManager
-	cardReader      *IDCardReader
-	logger          *log.Logger
+	ReaderManager *ReaderManager
+	cardReader    *IDCardReader
+	logger        *log.Logger
 
 	// State
 	mu              sync.RWMutex
@@ -68,7 +68,7 @@ func (cs *CardService) Start(ctx context.Context) {
 
 			if readerConnected != lastReaderConnected {
 				lastReaderConnected = readerConnected
-				
+
 				cs.mu.Lock()
 				cs.readerConnected = readerConnected
 				cs.mu.Unlock()
@@ -95,7 +95,7 @@ func (cs *CardService) Start(ctx context.Context) {
 
 				if cardPresent != lastCardPresent {
 					lastCardPresent = cardPresent
-					
+
 					cs.mu.Lock()
 					cs.cardPresent = cardPresent
 					cs.mu.Unlock()
@@ -134,7 +134,7 @@ func (cs *CardService) ReadCard() (*CardData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to card: %w", err)
 	}
-	defer card.Disconnect(scard.LeaveCard)
+	defer card.Disconnect(scard.LeaveCard) //nolint:errcheck
 
 	// Read card data
 	cardData, err := cs.cardReader.ReadCard(card)
@@ -165,7 +165,7 @@ func (cs *CardService) GetStatus() map[string]interface{} {
 // Subscribe creates a new event subscription
 func (cs *CardService) Subscribe() chan CardEvent {
 	ch := make(chan CardEvent, 10)
-	
+
 	cs.subMu.Lock()
 	cs.subscribers[ch] = true
 	cs.subMu.Unlock()
@@ -198,7 +198,7 @@ func (cs *CardService) broadcastEvent(event CardEvent) {
 // Close closes the card service
 func (cs *CardService) Close() error {
 	close(cs.stopChan)
-	
+
 	cs.subMu.Lock()
 	for ch := range cs.subscribers {
 		close(ch)
@@ -206,5 +206,5 @@ func (cs *CardService) Close() error {
 	cs.subscribers = make(map[chan CardEvent]bool)
 	cs.subMu.Unlock()
 
-		return cs.ReaderManager.Close()
+	return cs.ReaderManager.Close()
 }

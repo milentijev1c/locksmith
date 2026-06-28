@@ -1,0 +1,57 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - gosimple
+    - errcheck
+    - gofmt
+    - goimports
+    - misspell
+    - unconvert
+    - gocritic
+    - revive
+
+linters-settings:
+  govet:
+    shadow: false
+  errcheck:
+    check-blank: false
+    exclude-functions:
+      - (*log.Logger).Println
+      - (*log.Logger).Printf
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: exported
+        disabled: true
+      - name: increment-decrement
+      - name: var-naming
+        disabled: true
+      - name: package-comments
+        disabled: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-tags:
+      - style
+      - experimental
+  goimports:
+    local-prefixes: github.com/milentijev1c/locksmith
+
+issues:
+  exclude-rules:
+    # Test files can have longer functions and more relaxed rules
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
