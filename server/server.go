@@ -39,7 +39,7 @@ func NewServer(cfg *config.Config, cardService *card.CardService, signService *c
 
 	// Setup routes
 	mux := http.NewServeMux()
-	
+
 	// Add CORS middleware
 	wrappedMux := s.corsMiddleware(mux)
 
@@ -49,6 +49,7 @@ func NewServer(cfg *config.Config, cardService *card.CardService, signService *c
 	mux.HandleFunc("/card/read", s.handleCardRead)
 	mux.HandleFunc("/card/sign", s.handleCardSign)
 	mux.HandleFunc("/card/photo", s.handleCardPhoto)
+	mux.HandleFunc("/card/certificate", s.handleCardCertificate)
 
 	// WebSocket endpoint
 	mux.HandleFunc("/ws", s.handleWebSocket)
@@ -82,7 +83,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		
+
 		// Allow localhost and configured origins
 		if isOriginAllowed(origin, s.config.AllowedOrigins) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
@@ -204,8 +205,41 @@ func (s *Server) handleCardSign(w http.ResponseWriter, r *http.Request) {
 		SignatureBase64: base64.StdEncoding.EncodeToString(signature),
 	}
 
+	// Optionally include the signing certificate in the response
+	certDER, err := s.signService.GetSigningCertificate()
+	if err == nil && len(certDER) > 0 {
+		resp.CertificateBase64 = base64.StdEncoding.EncodeToString(certDER)
+	} else if err != nil {
+		s.logger.Printf("Could not retrieve certificate: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// handleCardCertificate returns the DER-encoded certificate from the card as base64
+func (s *Server) handleCardCertificate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.signService == nil {
+		http.Error(w, "signing not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	certDER, err := s.signService.GetCertificate()
+	if err != nil {
+		s.logger.Printf("Certificate error: %v", err)
+		http.Error(w, fmt.Sprintf("certificate retrieval failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"certificate_base64": base64.StdEncoding.EncodeToString(certDER),
+	})
 }
 
 // handleCardPhoto returns the card's photo

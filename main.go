@@ -44,13 +44,17 @@ func main() {
 	go cardService.Start(context.Background())
 	logger.Println("Card service started")
 
-	// Initialize signing service
+	// Initialize signing service (lazy — PKCS#11 module loaded on first request)
 	signService, err := card.NewSignService(logger, cfg.PKCS11Module)
 	if err != nil {
 		logger.Printf("Warning: signing unavailable: %v", err)
 	}
 	if signService != nil {
 		defer signService.Close()
+		// Try to eagerly initialize if possible (card already inserted)
+		if initErr := signService.Init(); initErr != nil {
+			logger.Printf("Sign service will initialize on first request: %v", initErr)
+		}
 	}
 
 	// Initialize HTTP server

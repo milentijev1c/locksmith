@@ -1,0 +1,19 @@
+port: 19711
+bind_address: 127.0.0.1
+allowed_origins:
+  - http://localhost:3000
+  - http://127.0.0.1:3000
+
+log_level: info
+log_file: ""
+
+card_poll_interval_ms: 500
+sign_timeout_seconds: 30
+
+# Path to the PKCS#11 module for Serbian ID cards
+# Linux:   /usr/lib/srb-id-pkcs11.so (package install) or ~/lib/libsrb-id-pkcs11.so
+# macOS:   /usr/local/lib/libsrb-id-pkcs11.dylib
+# Windows: C:\Program Files\srb-id-pkcs11.dll
+#
+# Download from: https://github.com/ubavic/srb-id-pkcs11/releases
+pkcs11_module: /usr/lib/srb-id-pkcs11.so

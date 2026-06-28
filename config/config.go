@@ -9,14 +9,14 @@ import (
 )
 
 type Config struct {
-	Port                 int      `yaml:"port"`
-	BindAddress          string   `yaml:"bind_address"`
-	AllowedOrigins       []string `yaml:"allowed_origins"`
-	LogLevel             string   `yaml:"log_level"`
-	LogFile              string   `yaml:"log_file"`
-	CardPollIntervalMs   int      `yaml:"card_poll_interval_ms"`
-	SignTimeoutSeconds   int      `yaml:"sign_timeout_seconds"`
-	PKCS11Module         string   `yaml:"pkcs11_module"`
+	Port               int      `yaml:"port"`
+	BindAddress        string   `yaml:"bind_address"`
+	AllowedOrigins     []string `yaml:"allowed_origins"`
+	LogLevel           string   `yaml:"log_level"`
+	LogFile            string   `yaml:"log_file"`
+	CardPollIntervalMs int      `yaml:"card_poll_interval_ms"`
+	SignTimeoutSeconds int      `yaml:"sign_timeout_seconds"`
+	PKCS11Module       string   `yaml:"pkcs11_module"`
 }
 
 var defaultConfig = Config{
@@ -27,7 +27,7 @@ var defaultConfig = Config{
 	LogFile:            "",
 	CardPollIntervalMs: 500,
 	SignTimeoutSeconds: 30,
-	PKCS11Module:       "",
+	PKCS11Module:       "/usr/lib/srb-id-pkcs11.so",
 }
 
 // Load loads configuration from file or environment, with defaults
