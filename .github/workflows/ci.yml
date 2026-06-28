@@ -17,6 +17,11 @@ jobs:
         with:
           go-version: '1.26'
 
+      - name: Install system dependencies (libpcsclite)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libpcsclite-dev
+
       - name: Install golangci-lint from source
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 
