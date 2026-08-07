@@ -55,8 +55,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libpcsclite-dev gcc-aarch64-linux-gnu
 
+      - name: Install Windows MinGW
+        if: matrix.runner == 'windows-latest'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
       - name: Build (native)
         if: ${{ !matrix.cross }}
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -66,20 +73,24 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY="${BINARY}.exe"
           fi
+          mkdir -p dist
           go build -trimpath -ldflags="-s -w" -o "dist/${BINARY}" .
 
       - name: Build (Linux arm64 cross-compile)
         if: matrix.cross
+        shell: bash
         env:
           GOOS: linux
           GOARCH: arm64
           CGO_ENABLED: 1
           CC: aarch64-linux-gnu-gcc
         run: |
+          mkdir -p dist
           go build -trimpath -ldflags="-s -w" -o "dist/locksmith-linux-arm64" .
 
       - name: Package (Linux/macOS)
         if: matrix.goos != 'windows'
+        shell: bash
         run: |
           cd dist
           BINARY="locksmith-${{ matrix.goos }}-${{ matrix.goarch }}"
