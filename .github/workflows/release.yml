@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            pkg-config: true
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            pkg-config: true
+            cross: true
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+            pkg-config: false
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            pkg-config: false
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+            pkg-config: false
+
+    runs-on: ${{ matrix.runner }}
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Install Linux dependencies
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcsclite-dev gcc-aarch64-linux-gnu
+
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          BINARY="locksmith-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY="${BINARY}.exe"
+          fi
+          go build -trimpath -ldflags="-s -w" -o "dist/${BINARY}" .
+
+      - name: Build (Linux arm64 cross-compile)
+        if: matrix.cross
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 1
+          CC: aarch64-linux-gnu-gcc
+        run: |
+          go build -trimpath -ldflags="-s -w" -o "dist/locksmith-linux-arm64" .
+
+      - name: Package (Linux/macOS)
+        if: matrix.goos != 'windows'
+        run: |
+          cd dist
+          BINARY="locksmith-${{ matrix.goos }}-${{ matrix.goarch }}"
+          tar -czf "${BINARY}.tar.gz" "${BINARY}"
+          echo "ASSET=${BINARY}.tar.gz" >> $GITHUB_ENV
+
+      - name: Package (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          cd dist
+          $binary = "locksmith-windows-amd64.exe"
+          Compress-Archive -Path $binary -DestinationPath "locksmith-windows-amd64.zip"
+          echo "ASSET=locksmith-windows-amd64.zip" >> $env:GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ env.ASSET }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
