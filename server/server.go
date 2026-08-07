@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -44,11 +45,15 @@ func NewServer(cfg *config.Config, cardService *card.CardService, signService *c
 	// Add CORS middleware
 	wrappedMux := s.corsMiddleware(mux)
 
+	// Static web UI
+	s.registerStaticUI(mux)
+
 	// REST endpoints
 	mux.HandleFunc("/status", s.handleStatus)
 	mux.HandleFunc("/readers", s.handleReaders)
 	mux.HandleFunc("/card/read", s.handleCardRead)
 	mux.HandleFunc("/card/sign", s.handleCardSign)
+	mux.HandleFunc("/card/sign-pdf", s.handleSignPDF)
 	mux.HandleFunc("/card/photo", s.handleCardPhoto)
 	mux.HandleFunc("/card/certificate", s.handleCardCertificate)
 
@@ -102,17 +107,24 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// isOriginAllowed checks if an origin is in the allowed list
+// isOriginAllowed checks if an origin is in the allowed list.
+// It also allows any localhost/127.0.0.1 origin (self-origin for the web UI).
 func isOriginAllowed(origin string, allowed []string) bool {
 	if origin == "" {
 		return true
 	}
 
 	for _, allowedOrigin := range allowed {
-		if origin == allowedOrigin || origin == "http://localhost:3000" || origin == "http://127.0.0.1:3000" {
+		if origin == allowedOrigin {
 			return true
 		}
 	}
+
+	// Allow any localhost/127.0.0.1 origin on any port (the web UI served by this daemon)
+	if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
+		return true
+	}
+
 	return false
 }
 
@@ -241,6 +253,48 @@ func (s *Server) handleCardCertificate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"certificate_base64": base64.StdEncoding.EncodeToString(certDER),
 	})
+}
+
+// handleSignPDF signs a PDF and returns the signed PDF bytes
+func (s *Server) handleSignPDF(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.signService == nil {
+		http.Error(w, "signing not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req card.SignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.PayloadBase64 == "" || req.PIN == "" {
+		http.Error(w, "missing payload_base64 or pin", http.StatusBadRequest)
+		return
+	}
+
+	pdfBytes, err := base64.StdEncoding.DecodeString(req.PayloadBase64)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid payload encoding: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	signedPDF, err := s.signService.SignPDF(pdfBytes, req.PIN, req.Algorithm)
+	if err != nil {
+		s.logger.Printf("PDF sign error: %v", err)
+		http.Error(w, fmt.Sprintf("pdf signing failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"signed.pdf\"")
+	w.WriteHeader(http.StatusOK)
+	w.Write(signedPDF)
 }
 
 // handleCardPhoto returns the card's photo

@@ -17,11 +17,13 @@ simple HTTP + WebSocket API on `localhost`.
 
 ## Features
 
-- 🪪 **Read card data** — name, JMBG, address, document info, photo
-- ✍️ **Digital signing** — sign arbitrary payloads using the card's private key (PKCS#11)
-- 📡 **Real-time events** — WebSocket notifications for card insert/remove
-- 🔒 **Local-only** — binds to `127.0.0.1`, no external exposure
-- ⚙️ **Configurable** — YAML config with sane defaults
+| Feature | Description |
+|---------|-------------|
+| 🪪 **Read card data** | Name, JMBG, address, document info, photo |
+| ✍️ **PDF signing** | Sign PDFs with visible signature + CMS/PKCS#7 embedded |
+| 📡 **Real-time events** | WebSocket notifications for card insert/remove |
+| 🔒 **Local-only** | Binds to `127.0.0.1`, no external exposure |
+| ⚙️ **Configurable** | YAML config with sane defaults |
 
 ---
 
@@ -30,9 +32,9 @@ simple HTTP + WebSocket API on `localhost`.
 | Dependency | Notes |
 |---|---|
 | **Go 1.26+** | [go.dev](https://go.dev/dl/) |
-| **pcscd** | PC/SC daemon — `sudo apt install pcscd` (Linux) |
-| **libpcsclite-dev** | `sudo apt install libpcsclite-dev` (Linux) |
-| **srb-id-pkcs11** | [Download](https://github.com/ubavic/srb-id-pkcs11/releases) — required for signing |
+| **pcscd** | PC/SC daemon — `sudo systemctl start pcscd` |
+| **libpcsclite-dev** | `sudo apt install libpcsclite-dev` |
+| **srb-id-pkcs11** | [Download](https://github.com/ubavic/srb-id-pkcs11/releases) |
 | **Smart card reader** | Any PC/SC compatible reader |
 | **Serbian ID card** | The physical card with PIN |
 
@@ -44,10 +46,10 @@ simple HTTP + WebSocket API on `localhost`.
 git clone https://github.com/milentijev1c/locksmith.git
 cd locksmith
 
-# Start the PC/SC daemon (Linux)
+# Start the PC/SC daemon
 sudo systemctl start pcscd
 
-# Fetch dependencies and run
+# Build and run
 go mod download
 go run main.go
 ```
@@ -57,8 +59,6 @@ The service starts at **http://127.0.0.1:19711**.
 ---
 
 ## Configuration
-
-Copy and edit `config.yaml.example`:
 
 ```bash
 cp config.yaml.example config.yaml
@@ -83,6 +83,47 @@ cp config.yaml.example config.yaml
 | Windows | `C:\Program Files\srb-id-pkcs11.dll` |
 
 </details>
+
+---
+
+## 🖥️ Web UI — Signing a PDF
+
+Open **http://127.0.0.1:19711/** in your browser to access the built-in signing page.
+
+### How it works
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Upload PDF  │ ──▶ │  Enter PIN   │ ──▶ │  Signed PDF  │
+│  (drag &     │     │  (card auth) │     │  (download)  │
+│   drop)      │     │              │     │              │
+└──────────────┘     └──────────────┘     └──────────────┘
+```
+
+1. **Upload a PDF** — drag & drop or click to select any PDF file
+2. **Insert your ID card** — the Web UI detects it in real time via WebSocket
+3. **Enter your PIN** — the card authenticates with the chip
+4. **Choose algorithm** — SHA256 (default), SHA384, or SHA512
+5. **Download the signed PDF** — the result is a standard PDF with an embedded visible signature
+
+The signed PDF contains:
+- A **visible signature box** at the bottom-right corner with the signer's name and date
+- A **CMS/PKCS#7 detached signature** embedded in the PDF structure
+- A **ByteRange** reference for cryptographic verification
+
+### What the signature looks like
+
+```
+┌─────────────────────────────────┐
+│  Digitally signed by            │
+│  ─────────────────────────────  │
+│  ALEKSANDAR MILENTIJEVIC        │
+│  2026-01-01                     │
+│  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬   │
+└─────────────────────────────────┘
+```
+
+> **Note:** Cyrillic names from the ID card are automatically transliterated to Latin characters.
 
 ---
 
@@ -117,9 +158,6 @@ Real-time events pushed to connected clients:
 # Health check
 curl http://127.0.0.1:19711/status
 
-# List readers
-curl http://127.0.0.1:19711/readers
-
 # Read card data
 curl http://127.0.0.1:19711/card/read
 
@@ -128,162 +166,79 @@ curl http://127.0.0.1:19711/card/certificate
 ```
 
 ```javascript
-// JavaScript — listen for card events
+// Listen for card events via WebSocket
 const ws = new WebSocket('ws://127.0.0.1:19711/ws')
 ws.onmessage = e => console.log(JSON.parse(e.data))
 ```
 
----
+### REST API Signing (Raw Signature)
 
-## ✍️ Signing a PDF with Locksmith
-
-This walkthrough shows how to **digitally sign a blank PDF** using the Serbian ID card through Locksmith.
-
-### Step 1 — Start the middleware
+For programmatic signing without the Web UI:
 
 ```bash
-# Make sure pcscd is running and the PKCS#11 module is installed
-sudo systemctl start pcscd
-
-# Start Locksmith
-go run main.go
-```
-
-Insert your Serbian ID card into the reader when prompted.
-
-### Step 2 — Create a blank PDF
-
-Create a minimal blank PDF (or use any existing PDF):
-
-```bash
-# Using Python
-python3 -c "
-import struct
-pdf = b'%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n190\n%%EOF'
-with open('document.pdf', 'wb') as f:
-    f.write(pdf)
-"
-```
-
-### Step 3 — Hash the PDF
-
-Calculate the SHA-256 digest of the PDF file. This is the payload that gets signed:
-
-```bash
-sha256sum document.pdf
-# Example output: a]3f8b2c...  document.pdf
-```
-
-Or in JavaScript:
-
-```javascript
-const crypto = require('crypto');
-const fs = require('fs');
-const pdfBytes = fs.readFileSync('document.pdf');
-const hash = crypto.createHash('sha256').update(pdfBytes).digest();
-const payloadBase64 = hash.toString('base64');
-```
-
-### Step 4 — Send the signing request
-
-```bash
-# Base64-encode the raw PDF bytes (the middleware hashes internally)
+# Sign a PDF via the REST API
 PAYLOAD=$(base64 -w 0 document.pdf)
 
-# Sign with your ID card PIN
 curl -X POST http://127.0.0.1:19711/card/sign \
   -H "Content-Type: application/json" \
   -d "{
     \"payload_base64\": \"$PAYLOAD\",
-    \"pin\": \"YOUR_PIN_HERE\",
+    \"pin\": \"YOUR_PIN\",
     \"algorithm\": \"SHA256withRSA\"
   }"
 ```
 
-<details>
-<summary><strong>Or sign just the hash (smaller payload)</strong></summary>
-
-If you prefer to hash the PDF yourself and send only the 32-byte digest:
+The response contains `signature_base64` and `certificate_base64` for independent verification:
 
 ```bash
-# Hash the PDF, base64-encode the hash
-HASH=$(sha256sum -b document.pdf | cut -d' ' -f1 | xxd -r -p | base64)
-
-curl -X POST http://127.0.0.1:19711/card/sign \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"payload_base64\": \"$HASH\",
-    \"pin\": \"YOUR_PIN_HERE\",
-    \"algorithm\": \"SHA256withRSA\"
-  }"
-```
-
-</details>
-
-### Step 5 — Response
-
-The middleware returns a JSON response:
-
-```json
-{
-  "signature_base64": "MEUCIQD...base64-encoded RSA signature...",
-  "certificate_base64": "MIIC...DER-encoded X.509 certificate..."
-}
-```
-
-| Field | Description |
-|---|---|
-| `signature_base64` | The RSA PKCS#1 v1.5 signature over the payload |
-| `certificate_base64` | The card's signing certificate (DER → base64) |
-
-### Step 6 — Verify the signature (optional)
-
-```bash
-# Save the certificate
 echo "$CERT_BASE64" | base64 -d > signer.crt
-
-# Save the signature
 echo "$SIG_BASE64" | base64 -d > document.sig
-
-# Verify (OpenSSL)
 openssl dgst -sha256 -verify signer.crt -signature document.sig document.pdf
-# Expected output: Verified OK
+# Expected: Verified OK
 ```
 
-### Full JavaScript Example
+---
 
-```javascript
-const crypto = require('crypto');
-const fs = require('fs');
+## Signing Walkthrough — Step by Step
 
-async function signPDF(pdfPath, pin) {
-  // Read and hash the PDF
-  const pdfBytes = fs.readFileSync(pdfPath);
-  const hash = crypto.createHash('sha256').update(pdfBytes).digest('base64');
+### Step 1 — Start the middleware
 
-  // Send signing request to Locksmith
-  const res = await fetch('http://127.0.0.1:19711/card/sign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      payload_base64: hash,
-      pin: pin,
-      algorithm: 'SHA256withRSA',
-    }),
-  });
+```bash
+sudo systemctl start pcscd
+go run main.go
+```
 
-  const { signature_base64, certificate_base64 } = await res.json();
+### Step 2 — Open the Web UI
 
-  // Save outputs
-  fs.writeFileSync('document.sig', Buffer.from(signature_base64, 'base64'));
-  fs.writeFileSync('signer.crt', Buffer.from(certificate_base64, 'base64'));
+Navigate to **http://127.0.0.1:19711/** in your browser.
 
-  console.log('✅ PDF signed successfully');
-  console.log('   Signature: document.sig');
-  console.log('   Certificate: signer.crt');
-}
+### Step 3 — Upload a PDF
 
-signPDF('document.pdf', 'YOUR_PIN');
+Click the upload area or drag a PDF file onto it. Any PDF works — blank or content.
+
+### Step 4 — Insert your ID card
+
+Insert your Serbian ID card into the connected card reader. The Web UI will show a real-time "Card detected" status via WebSocket.
+
+### Step 5 — Enter your PIN
+
+Type your card PIN into the input field and click **Sign**.
+
+### Step 6 — Download the signed PDF
+
+The signed PDF is returned automatically. It contains:
+
+| Component | Description |
+|---|---|
+| **Visible signature** | Bottom-right corner box with name + date |
+| **CMS signature** | Embedded PKCS#7/CMS detached signature |
+| **ByteRange** | Cryptographic integrity reference |
+
+### Step 7 — Verify (optional)
+
+```bash
+# Extract the signature from a signed PDF and verify
+openssl cms -verify -in signed.pdf -CAfile signer.crt -out /dev/null
 ```
 
 ---
@@ -293,6 +248,8 @@ signPDF('document.pdf', 'YOUR_PIN');
 ```
 ├── main.go              # Application entry point
 ├── config.yaml.example  # Example configuration
+├── web/
+│   └── index.html       # Built-in signing web UI
 ├── config/
 │   └── config.go        # Configuration loader (YAML + defaults)
 ├── card/
@@ -300,9 +257,11 @@ signPDF('document.pdf', 'YOUR_PIN');
 │   ├── reader.go        # PC/SC smart card reader manager
 │   ├── idcard.go        # Serbian ID card TLV parser
 │   ├── service.go       # Card read service (polling, events)
-│   └── sign.go          # PKCS#11 signing service
+│   ├── sign.go          # PKCS#11 signing service
+│   └── pdfsign.go       # PDF signature embedding (visible + CMS)
 └── server/
     ├── server.go        # HTTP server & REST handlers
+    ├── static.go        # Static file server (web UI)
     └── websocket.go     # WebSocket hub & client management
 ```
 

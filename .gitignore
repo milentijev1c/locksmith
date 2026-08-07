@@ -19,6 +19,7 @@ vendor/
 server/rest.go
 card/*_test.go
 server/*_test.go
+test/
 config.yaml
 locksmith
 
