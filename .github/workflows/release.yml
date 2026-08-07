@@ -67,22 +67,33 @@ jobs:
           mkdir -p dist
           go build -trimpath -ldflags="-s -w" -o "dist/${BINARY}" .
 
-      - name: Package (Linux/macOS)
-        if: matrix.goos != 'windows'
+      - name: Package (Linux)
+        if: matrix.goos == 'linux'
         shell: bash
         run: |
           cd dist
-          BINARY="locksmith-${{ matrix.goos }}-${{ matrix.goarch }}"
-          tar -czf "${BINARY}.tar.gz" "${BINARY}"
-          echo "ASSET=${BINARY}.tar.gz" >> $GITHUB_ENV
+          chmod +x "${{ github.workspace }}/packaging/install-linux.sh"
+          cp "${{ github.workspace }}/packaging/install-linux.sh" .
+          tar -czf "locksmith-linux-${{ matrix.goarch }}.tar.gz" locksmith-linux-amd64 install-linux.sh
+          echo "ASSET=locksmith-linux-${{ matrix.goarch }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Package (macOS)
+        if: matrix.goos == 'darwin'
+        shell: bash
+        run: |
+          cd dist
+          chmod +x "${{ github.workspace }}/packaging/install-macos.sh"
+          cp "${{ github.workspace }}/packaging/install-macos.sh" .
+          tar -czf "locksmith-darwin-${{ matrix.goarch }}.tar.gz" "locksmith-darwin-${{ matrix.goarch }}" install-macos.sh
+          echo "ASSET=locksmith-darwin-${{ matrix.goarch }}.tar.gz" >> $GITHUB_ENV
 
       - name: Package (Windows)
         if: matrix.goos == 'windows'
         shell: pwsh
         run: |
           cd dist
-          $binary = "locksmith-windows-amd64.exe"
-          Compress-Archive -Path $binary -DestinationPath "locksmith-windows-amd64.zip"
+          Copy-Item "${{ github.workspace }}/packaging/install-windows.ps1" .
+          Compress-Archive -Path "locksmith-windows-amd64.exe","install-windows.ps1" -DestinationPath "locksmith-windows-amd64.zip"
           echo "ASSET=locksmith-windows-amd64.zip" >> $env:GITHUB_ENV
 
       - name: Upload artifact

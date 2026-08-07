@@ -27,34 +27,47 @@ simple HTTP + WebSocket API on `localhost`.
 
 ---
 
-## Prerequisites
+## Install
 
-| Dependency | Notes |
-|---|---|
-| **Go 1.26+** | [go.dev](https://go.dev/dl/) |
-| **pcscd** | PC/SC daemon — `sudo systemctl start pcscd` |
-| **libpcsclite-dev** | `sudo apt install libpcsclite-dev` |
-| **srb-id-pkcs11** | [Download](https://github.com/ubavic/srb-id-pkcs11/releases) |
-| **Smart card reader** | Any PC/SC compatible reader |
-| **Serbian ID card** | The physical card with PIN |
+### Linux
 
----
+```bash
+curl -fsSL https://raw.githubusercontent.com/milentijev1c/locksmith/main/packaging/install-linux.sh | bash
+```
 
-## Quick Start
+Or download manually from [Releases](https://github.com/milentijev1c/locksmith/releases) and run `install-linux.sh`.
+
+The installer will:
+- Install the binary to `/usr/local/bin/locksmith`
+- Set up a systemd service (auto-starts on boot)
+- Start `pcscd` automatically
+
+### macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/milentijev1c/locksmith/main/packaging/install-macos.sh | bash
+```
+
+Or download manually from [Releases](https://github.com/milentijev1c/locksmith/releases) and run `install-macos.sh`.
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/milentijev1c/locksmith/main/packaging/install-windows.ps1 | iex
+```
+
+Or download `locksmith-windows-amd64.zip` from [Releases](https://github.com/milentijev1c/locksmith/releases), extract it, and run `install-windows.ps1` in PowerShell (as Administrator).
+
+### From Source
 
 ```bash
 git clone https://github.com/milentijev1c/locksmith.git
 cd locksmith
-
-# Start the PC/SC daemon
-sudo systemctl start pcscd
-
-# Build and run
 go mod download
 go run main.go
 ```
 
-The service starts at **http://127.0.0.1:19711**.
+> Requires Go 1.26+, `libpcsclite-dev`, and `pcscd` running.
 
 ---
 

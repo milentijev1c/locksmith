@@ -1,0 +1,20 @@
+[Unit]
+Description=Locksmith - Serbian ID Card Middleware
+After=pcscd.service
+Requires=pcscd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/locksmith
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/tmp
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
