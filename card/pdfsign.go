@@ -111,9 +111,7 @@ func (ss *SignService) SignPDF(pdfBytes []byte, pin string, algorithm string) ([
 	for _, o := range origObjs {
 		finalObjs = append(finalObjs, objEntry{o.num, o.data})
 	}
-	finalObjs = append(finalObjs, objEntry{sigObj, sigDict})
-	finalObjs = append(finalObjs, objEntry{apObj, apDict})
-	finalObjs = append(finalObjs, objEntry{fieldObj, fieldDict})
+	finalObjs = append(finalObjs, objEntry{sigObj, sigDict}, objEntry{apObj, apDict}, objEntry{fieldObj, fieldDict})
 
 	sort.Slice(finalObjs, func(i, j int) bool {
 		return finalObjs[i].num < finalObjs[j].num
@@ -208,7 +206,7 @@ func (ss *SignService) SignPDF(pdfBytes []byte, pin string, algorithm string) ([
 		return nil, fmt.Errorf("CMS signature too large (%d hex chars, max %d)", len(sigHex), pdfSigPlaceholderLen)
 	}
 	sigHexPadded := sigHex + strings.Repeat("0", pdfSigPlaceholderLen-len(sigHex))
-	copy(result[hexStart:hexEnd], []byte(sigHexPadded))
+	copy(result[hexStart:hexEnd], sigHexPadded)
 
 	return result, nil
 }

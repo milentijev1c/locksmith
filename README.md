@@ -117,7 +117,7 @@ The signed PDF contains:
 ┌─────────────────────────────────┐
 │  Digitally signed by            │
 │  ─────────────────────────────  │
-│  ALEKSANDAR MILENTIJEVIC        │
+│  DANILO MILENTIJEVIC            │
 │  2026-01-01                     │
 │  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬   │
 └─────────────────────────────────┘
