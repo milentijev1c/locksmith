@@ -209,7 +209,7 @@ func (s *Server) handleCardSign(w http.ResponseWriter, r *http.Request) {
 
 	signature, err := s.signService.Sign(payload, req.PIN, req.Algorithm)
 	if err != nil {
-		s.logger.Printf("Sign error: %v", err)
+		s.logger.Printf("Sign error: %v", strings.NewReplacer("\n", "", "\r", "").Replace(err.Error()))
 		http.Error(w, fmt.Sprintf("signing failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -286,7 +286,7 @@ func (s *Server) handleSignPDF(w http.ResponseWriter, r *http.Request) {
 
 	signedPDF, err := s.signService.SignPDF(pdfBytes, req.PIN, req.Algorithm)
 	if err != nil {
-		s.logger.Printf("PDF sign error: %v", err)
+		s.logger.Printf("PDF sign error: %v", strings.NewReplacer("\n", "", "\r", "").Replace(err.Error()))
 		http.Error(w, fmt.Sprintf("pdf signing failed: %v", err), http.StatusInternalServerError)
 		return
 	}
