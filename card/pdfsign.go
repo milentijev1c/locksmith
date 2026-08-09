@@ -90,6 +90,11 @@ func (ss *SignService) SignPDF(pdfBytes []byte, pin string, algorithm string) ([
 	now := time.Now().UTC().Format("20060102150405+00'00'")
 	sigPH := strings.Repeat("0", pdfSigPlaceholderLen)
 	signerCN := sanitizeName(cert.Subject.CommonName)
+	// Strip trailing certificate-use suffixes (e.g. " Auth") that aren't part
+	// of the person's real name but are appended by Serbian ID card CAs.
+	if idx := strings.LastIndex(signerCN, " Auth"); idx > 0 {
+		signerCN = strings.TrimSpace(signerCN[:idx])
+	}
 	issueDate := time.Now().UTC().Format("2006-01-02")
 
 	sigDict := []byte(fmt.Sprintf(
@@ -697,12 +702,13 @@ func buildSigAppearance(label, name, date string, mediaBox []float64) string {
 	w := 220.0
 	h := 70.0
 
-	// Light gray background with rounded border
+	// Light gray background with border
 	cs.WriteString("0.95 0.95 0.95 rg\n")
 	fmt.Fprintf(&cs, "2 2 %.0f %.0f re f\n", w-4, h-4)
 	cs.WriteString("0 0 0 rg\n")
-	cs.WriteString("0.5 0.5 0.5 RG 0.5 w\n")
-	fmt.Fprintf(&cs, "1 1 m %.0f 1 l %.0f %.0f l 1 %.0f l c S\n", w-1, w-1, h-1, h-1)
+	cs.WriteString("0.5 0.5 0.5 RG 1 w\n")
+	cs.WriteString(fmt.Sprintf("1 1 m %.0f 1 l %.0f %.0f l 1 %.0f l ", w-1, w-1, h-1, h-1))
+	cs.WriteString("h S\n")
 
 	// Signature label (small, gray)
 	cs.WriteString("0.4 0.4 0.4 rg\n")
@@ -718,11 +724,6 @@ func buildSigAppearance(label, name, date string, mediaBox []float64) string {
 	cs.WriteString("0 0 0 rg\n")
 	cs.WriteString("BT /F1 10 Tf\n")
 	fmt.Fprintf(&cs, "8 %.0f Td\n", h-34)
-	runes := []rune(name)
-	maxNameChars := 28
-	if len(runes) > maxNameChars {
-		name = string(runes[:maxNameChars]) + "\u2026"
-	}
 	cs.WriteString("(" + escapePDFText(name) + ") Tj ET\n")
 
 	// Date (small, gray)
